@@ -1,0 +1,19 @@
+{
+  "rewrites": [
+    {
+      "source": "/apply",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/html.*"
+        }
+      ],
+      "destination": "/index.html"
+    }
+  ]
+}
