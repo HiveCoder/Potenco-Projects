@@ -1,4 +1,4 @@
-function CandidatePanel({ candidate, loading }) {
+function CandidatePanel({ candidate, loading, isShortlisted, onToggleShortlist, onViewProfile }) {
   if (!candidate) {
     return (
       <aside className="glass-panel-strong sticky top-6 p-6">
@@ -104,13 +104,15 @@ function CandidatePanel({ candidate, loading }) {
           <div className="space-y-3">
             <button
               type="button"
+              onClick={() => onToggleShortlist(candidate)}
               disabled={loading}
               className="w-full rounded-2xl bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 px-4 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition hover:scale-[1.01] disabled:cursor-wait disabled:opacity-70"
             >
-              Shortlist Candidate
+              {isShortlisted ? 'Remove from Shortlist' : 'Shortlist Candidate'}
             </button>
             <button
               type="button"
+              onClick={() => onViewProfile(candidate)}
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
             >
               View Full Profile

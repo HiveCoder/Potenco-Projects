@@ -9,7 +9,7 @@ const navigationItems = [
   'Settings'
 ];
 
-function Sidebar() {
+function Sidebar({ activeSection, onNavigate, candidateCount, shortlistedCount }) {
   return (
     <aside className="glass-panel-strong sticky top-6 hidden h-[calc(100vh-3rem)] w-[260px] shrink-0 flex-col justify-between overflow-hidden p-5 lg:flex">
       <div>
@@ -24,13 +24,15 @@ function Sidebar() {
         </div>
 
         <nav className="space-y-2">
-          {navigationItems.map((item, index) => {
-            const active = index === 1;
+          {navigationItems.map((item) => {
+            const active = activeSection === item;
+            const badge = item === 'Candidates' ? candidateCount : item === 'Shortlisted' ? shortlistedCount : null;
 
             return (
               <button
                 key={item}
                 type="button"
+                onClick={() => onNavigate(item)}
                 className={[
                   'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition duration-200',
                   active
@@ -45,10 +47,23 @@ function Sidebar() {
                   ].join(' ')}
                 />
                 <span>{item}</span>
+                {badge !== null ? (
+                  <span className="ml-auto rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs text-slate-300">
+                    {badge}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </nav>
+
+        <a
+          href="/apply"
+          className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-left text-sm text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,0.12)] transition hover:bg-cyan-400/15"
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" />
+          <span>Candidate Apply</span>
+        </a>
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4">

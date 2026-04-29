@@ -13,16 +13,22 @@ function MatchList({ matches, selectedCandidate, onSelect }) {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {matches.map((candidate) => (
-          <CandidateCard
-            key={candidate.id}
-            candidate={candidate}
-            selected={selectedCandidate?.id === candidate.id}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
+      {matches.length ? (
+        <div className="space-y-4">
+          {matches.map((candidate) => (
+            <CandidateCard
+              key={candidate.id}
+              candidate={candidate}
+              selected={selectedCandidate?.id === candidate.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-slate-400">
+          No candidates available for the current view.
+        </div>
+      )}
     </section>
   );
 }
