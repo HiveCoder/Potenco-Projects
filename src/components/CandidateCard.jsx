@@ -34,6 +34,11 @@ function CandidateCard({ candidate, selected, onSelect }) {
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${status.tone}`}>
                 {status.label}
               </span>
+              {candidate.status ? (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">
+                  {candidate.status}
+                </span>
+              ) : null}
             </div>
             <p className="mt-1 text-sm text-slate-400">
               {roleLabel} · {candidate.location} · {candidate.experience} years experience

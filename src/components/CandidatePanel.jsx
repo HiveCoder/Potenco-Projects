@@ -1,4 +1,25 @@
-function CandidatePanel({ candidate, loading, isShortlisted, onToggleShortlist, onViewProfile }) {
+import { useEffect, useState } from 'react';
+
+const workflowStatuses = ['Applied', 'Screening', 'Interview', 'Offer', 'Rejected'];
+
+function CandidatePanel({
+  candidate,
+  loading,
+  isShortlisted,
+  onToggleShortlist,
+  onViewProfile,
+  onViewResume,
+  onSaveCandidateMeta,
+  savingCandidateId
+}) {
+  const [status, setStatus] = useState('Applied');
+  const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    setStatus(candidate?.status || 'Applied');
+    setNotes(candidate?.notes || '');
+  }, [candidate?.id, candidate?.status, candidate?.notes]);
+
   if (!candidate) {
     return (
       <aside className="glass-panel-strong sticky top-6 p-6">
@@ -56,6 +77,17 @@ function CandidatePanel({ candidate, loading, isShortlisted, onToggleShortlist, 
         <div className="mt-8 space-y-6">
           <div>
             <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Contact</h3>
+            </div>
+            <div className="space-y-2 rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <p>{candidate.email || 'No email provided'}</p>
+              <p>{candidate.phone || 'No phone provided'}</p>
+              <p>{candidate.linkedin || 'No LinkedIn provided'}</p>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Matched Skills</h3>
               <span className="text-sm text-cyan-300">{candidate.matchedSkills.length}</span>
             </div>
@@ -102,6 +134,48 @@ function CandidatePanel({ candidate, loading, isShortlisted, onToggleShortlist, 
           </div>
 
           <div className="space-y-3">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Workflow</h3>
+                <span className="text-xs text-slate-400">Recruiter State</span>
+              </div>
+              <div className="space-y-3">
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none"
+                >
+                  {workflowStatuses.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={4}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none"
+                  placeholder="Add recruiter notes"
+                />
+                <button
+                  type="button"
+                  onClick={() => onSaveCandidateMeta(candidate.id, { status, notes })}
+                  disabled={savingCandidateId === candidate.id}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {savingCandidateId === candidate.id ? 'Saving...' : 'Save Workflow Notes'}
+                </button>
+              </div>
+            </div>
+
+            {candidate.resume ? (
+              <button
+                type="button"
+                onClick={() => onViewResume(candidate)}
+                className="w-full rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/15"
+              >
+                Open CV: {candidate.resume.name || 'Uploaded Resume'}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => onToggleShortlist(candidate)}
@@ -118,6 +192,17 @@ function CandidatePanel({ candidate, loading, isShortlisted, onToggleShortlist, 
               View Full Profile
             </button>
           </div>
+
+          {candidate.resume?.previewText ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">CV Preview</h3>
+              </div>
+              <div className="max-h-44 overflow-auto rounded-3xl border border-white/10 bg-white/5 p-4 text-xs leading-6 text-slate-300">
+                {candidate.resume.previewText}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </aside>

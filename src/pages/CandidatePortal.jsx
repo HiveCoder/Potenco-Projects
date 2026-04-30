@@ -1,8 +1,13 @@
 import CandidateForm from '../components/CandidateForm.jsx';
 
-function CandidatePortal({ knownSkills, onSubmitted }) {
+function CandidatePortal({ knownSkills, onSubmitted, theme, onThemeToggle }) {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_22%),linear-gradient(180deg,#0B0F1A_0%,#0F172A_100%)] text-slate-100">
+    <main className={[
+      'min-h-screen',
+      theme === 'dark'
+        ? 'bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_22%),linear-gradient(180deg,#0B0F1A_0%,#0F172A_100%)] text-slate-100'
+        : 'bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_22%),linear-gradient(180deg,#F8FAFC_0%,#E2E8F0_100%)] text-slate-900'
+    ].join(' ')}>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 xl:px-8">
         <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_320px]">
           <section className="glass-panel-strong relative overflow-hidden p-8">
@@ -15,12 +20,19 @@ function CandidatePortal({ knownSkills, onSubmitted }) {
                 Put your profile in front of recruiters, <span className="text-gradient">faster</span>
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                Submit your credentials, upload your resume, and make your profile available to the same matching engine powering the recruiter dashboard.
+                Submit your credentials, upload your resume, and make your profile available to the hiring team workspace without exposing recruiter tools in this experience.
               </p>
             </div>
           </section>
 
-          <section className="glass-panel p-6">
+          <section className="glass-panel space-y-4 p-6">
+            <button
+              type="button"
+              onClick={onThemeToggle}
+              className="inline-flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+            >
+              {theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            </button>
             <p className="text-sm uppercase tracking-[0.25em] text-slate-500">What happens next</p>
             <div className="mt-5 space-y-4 text-sm leading-6 text-slate-300">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">1. Your structured profile is submitted through a Vercel serverless endpoint.</div>

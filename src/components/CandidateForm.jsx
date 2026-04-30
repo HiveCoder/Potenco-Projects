@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { saveSubmittedCandidate } from '../candidateStorage.js';
 
 const emptyForm = {
   name: '',
@@ -23,6 +25,14 @@ const formatBytes = (bytes) => {
   const value = bytes / 1024 ** index;
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Unable to read the uploaded resume.'));
+    reader.readAsDataURL(file);
+  });
 
 const buildLocalCandidate = (payload) => ({
   id: Date.now(),
@@ -57,15 +67,25 @@ const readResponsePayload = async (response) => {
 function CandidateForm({ knownSkills, onSubmitted }) {
   const [form, setForm] = useState(emptyForm);
   const [resumeFile, setResumeFile] = useState(null);
+  const [resumeDataUrl, setResumeDataUrl] = useState('');
   const [resumeTextPreview, setResumeTextPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [fileError, setFileError] = useState('');
+
+  const parsedSkills = useMemo(
+    () => form.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+    [form.skills]
+  );
 
   const detectedSkills = useMemo(() => {
-    const lowerSkills = form.skills.toLowerCase();
-    return knownSkills.filter((skill) => lowerSkills.includes(skill.toLowerCase()));
-  }, [form.skills, knownSkills]);
+    if (parsedSkills.length) {
+      return parsedSkills;
+    }
+
+    return knownSkills.slice(0, 6);
+  }, [parsedSkills, knownSkills]);
 
   const handleChange = (field) => (event) => {
     setForm((current) => ({
@@ -74,13 +94,45 @@ function CandidateForm({ knownSkills, onSubmitted }) {
     }));
   };
 
+  const handleSkillsKeyDown = (event) => {
+    if (event.key !== ' ' || !form.skills.trim() || /[,\s]$/.test(form.skills)) {
+      return;
+    }
+
+    event.preventDefault();
+    setForm((current) => ({
+      ...current,
+      skills: `${current.skills.trim()}, `
+    }));
+  };
+
+  const persistSubmittedCandidate = (candidate) => {
+    saveSubmittedCandidate(candidate);
+    onSubmitted(candidate);
+  };
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0] || null;
     setResumeFile(file);
+    setResumeDataUrl('');
     setResumeTextPreview('');
+    setFileError('');
 
     if (!file) {
       return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      setFileError('Resume files must be smaller than 4 MB.');
+      setResumeFile(null);
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setResumeDataUrl(dataUrl);
+    } catch {
+      setResumeDataUrl('');
     }
 
     if (file.type.startsWith('text/')) {
@@ -100,15 +152,20 @@ function CandidateForm({ knownSkills, onSubmitted }) {
     setSuccessMessage('');
 
     try {
+      if (!form.name.trim() || !form.email.trim() || !form.location.trim()) {
+        throw new Error('Name, email, and location are required.');
+      }
+
       const payload = {
         ...form,
         experience: Number(form.experience) || 0,
-        skills: form.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+        skills: parsedSkills,
         resume: resumeFile ? {
           name: resumeFile.name,
           size: resumeFile.size,
           type: resumeFile.type || 'application/octet-stream',
-          previewText: resumeTextPreview
+          previewText: resumeTextPreview,
+          dataUrl: resumeDataUrl
         } : null
       };
 
@@ -128,37 +185,41 @@ function CandidateForm({ knownSkills, onSubmitted }) {
 
       if (!result?.candidate) {
         const fallbackCandidate = buildLocalCandidate(payload);
-        onSubmitted(fallbackCandidate);
+        persistSubmittedCandidate(fallbackCandidate);
         setForm(emptyForm);
         setResumeFile(null);
+        setResumeDataUrl('');
         setResumeTextPreview('');
         setSuccessMessage('Profile submitted locally. For full API execution during development, run the app with Vercel dev.');
         return;
       }
 
-      onSubmitted(result.candidate);
+      persistSubmittedCandidate(result.candidate);
       setForm(emptyForm);
       setResumeFile(null);
+      setResumeDataUrl('');
       setResumeTextPreview('');
       setSuccessMessage('Profile submitted successfully and added to the matching pool.');
     } catch (submissionError) {
       const payload = {
         ...form,
         experience: Number(form.experience) || 0,
-        skills: form.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
+        skills: parsedSkills,
         resume: resumeFile ? {
           name: resumeFile.name,
           size: resumeFile.size,
           type: resumeFile.type || 'application/octet-stream',
-          previewText: resumeTextPreview
+          previewText: resumeTextPreview,
+          dataUrl: resumeDataUrl
         } : null
       };
 
       if (payload.name && payload.location && payload.skills.length) {
         const fallbackCandidate = buildLocalCandidate(payload);
-        onSubmitted(fallbackCandidate);
+        persistSubmittedCandidate(fallbackCandidate);
         setForm(emptyForm);
         setResumeFile(null);
+        setResumeDataUrl('');
         setResumeTextPreview('');
         setSuccessMessage('Profile submitted locally. The Vercel endpoint is unavailable in this dev mode, but your candidate was added to the dataset.');
       } else {
@@ -178,15 +239,15 @@ function CandidateForm({ knownSkills, onSubmitted }) {
           </span>
           <h2 className="mt-4 text-3xl font-semibold text-white">Submit your credentials and resume</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-            Complete your profile once. The system will add your structured data to the existing talent pool used by the matching dashboard.
+            Complete your profile once. The system will add your structured data to the existing talent pool reviewed inside the recruiter workspace.
           </p>
         </div>
-        <a
-          href="/"
+        <Link
+          to="/"
           className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
         >
-          Back to dashboard
-        </a>
+          Back to home
+        </Link>
       </div>
 
       <form className="space-y-8" onSubmit={handleSubmit}>
@@ -258,6 +319,7 @@ function CandidateForm({ knownSkills, onSubmitted }) {
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none transition focus:border-cyan-400/40"
               value={form.skills}
               onChange={handleChange('skills')}
+              onKeyDown={handleSkillsKeyDown}
               placeholder="React, JavaScript, Node.js"
               required
             />
@@ -342,6 +404,12 @@ function CandidateForm({ knownSkills, onSubmitted }) {
         {error ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
             {error}
+          </div>
+        ) : null}
+
+        {fileError ? (
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+            {fileError}
           </div>
         ) : null}
 

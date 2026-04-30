@@ -1,6 +1,7 @@
 import CandidatePanel from '../components/CandidatePanel.jsx';
 import HeroSection from '../components/HeroSection.jsx';
 import MatchList from '../components/MatchList.jsx';
+import MobileNav from '../components/MobileNav.jsx';
 import Sidebar from '../components/Sidebar.jsx';
 import StatsCards from '../components/StatsCards.jsx';
 
@@ -52,23 +53,41 @@ function CandidateDirectory({ candidates, selectedCandidate, onSelect, filterTex
   );
 }
 
-function RolesManager({ roleDraft, onRoleDraftChange, onApplyRole, loading }) {
+function RolesManager({ roleDraft, onRoleDraftChange, onApplyRole, onCreateJob, onActivateJob, onDeleteJob, jobs, activeJobId, loading }) {
   return (
     <SectionCard
       title="Jobs / Roles"
       subtitle="Adjust the active role definition used by the matching engine and rerun scoring instantly."
       action={
-        <button
-          type="button"
-          onClick={onApplyRole}
-          disabled={loading}
-          className="rounded-2xl bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition hover:scale-[1.01] disabled:cursor-wait disabled:opacity-70"
-        >
-          {loading ? 'Applying...' : 'Apply Role and Match'}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onCreateJob}
+            className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+          >
+            Save as New Job
+          </button>
+          <button
+            type="button"
+            onClick={onApplyRole}
+            disabled={loading}
+            className="rounded-2xl bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.3)] transition hover:scale-[1.01] disabled:cursor-wait disabled:opacity-70"
+          >
+            {loading ? 'Applying...' : 'Apply Role and Match'}
+          </button>
+        </div>
       }
     >
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <label className="space-y-2 text-sm text-slate-300">
+          <span>Job Title</span>
+          <input
+            value={roleDraft.title}
+            onChange={(event) => onRoleDraftChange('title', event.target.value)}
+            className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none transition focus:border-cyan-400/40"
+            placeholder="Senior React Developer"
+          />
+        </label>
         <label className="space-y-2 text-sm text-slate-300">
           <span>Required Skills</span>
           <input
@@ -98,6 +117,40 @@ function RolesManager({ roleDraft, onRoleDraftChange, onApplyRole, loading }) {
             placeholder="Toronto"
           />
         </label>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {jobs.map((job) => (
+          <div key={job.id} className="glass-panel flex items-center justify-between gap-4 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-white">{job.title}</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                {job.role.skills.join(', ')} · {job.role.location || 'Flexible'} · {job.role.experience} yrs
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => onActivateJob(job.id)}
+                className={[
+                  'rounded-xl px-3 py-2 text-xs',
+                  activeJobId === job.id ? 'bg-cyan-400/15 text-cyan-200' : 'border border-white/10 bg-white/5 text-slate-300'
+                ].join(' ')}
+              >
+                {activeJobId === job.id ? 'Active' : 'Activate'}
+              </button>
+              {job.id !== 'job-default' ? (
+                <button
+                  type="button"
+                  onClick={() => onDeleteJob(job.id)}
+                  className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))}
       </div>
     </SectionCard>
   );
@@ -199,6 +252,7 @@ function RecruiterDashboard({
   shortlistedCandidates,
   onToggleShortlist,
   onViewProfile,
+  onViewResume,
   roleDraft,
   onRoleDraftChange,
   onApplyRole,
@@ -206,7 +260,17 @@ function RecruiterDashboard({
   onCandidateSearchChange,
   onResetRole,
   onClearSubmitted,
-  onClearShortlisted
+  onClearShortlisted,
+  theme,
+  onThemeToggle,
+  onReturnHome,
+  jobs,
+  activeJobId,
+  onCreateJob,
+  onActivateJob,
+  onDeleteJob,
+  onSaveCandidateMeta,
+  savingCandidateId
 }) {
   const renderSection = () => {
     if (activeSection === 'Candidates') {
@@ -222,7 +286,19 @@ function RecruiterDashboard({
     }
 
     if (activeSection === 'Jobs / Roles') {
-      return <RolesManager roleDraft={roleDraft} onRoleDraftChange={onRoleDraftChange} onApplyRole={onApplyRole} loading={state.loading} />;
+      return (
+        <RolesManager
+          roleDraft={roleDraft}
+          onRoleDraftChange={onRoleDraftChange}
+          onApplyRole={onApplyRole}
+          onCreateJob={onCreateJob}
+          onActivateJob={onActivateJob}
+          onDeleteJob={onDeleteJob}
+          jobs={jobs}
+          activeJobId={activeJobId}
+          loading={state.loading}
+        />
+      );
     }
 
     if (activeSection === 'Shortlisted') {
@@ -278,16 +354,31 @@ function RecruiterDashboard({
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_22%),linear-gradient(180deg,#0B0F1A_0%,#0F172A_100%)] text-slate-100">
+    <main className={[
+      'min-h-screen',
+      theme === 'dark'
+        ? 'bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_22%),linear-gradient(180deg,#0B0F1A_0%,#0F172A_100%)] text-slate-100'
+        : 'bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_22%),linear-gradient(180deg,#F8FAFC_0%,#E2E8F0_100%)] text-slate-900'
+    ].join(' ')}>
       <div className="mx-auto flex min-h-screen max-w-[1800px] gap-6 px-4 py-6 sm:px-6 xl:px-8">
         <Sidebar
           activeSection={activeSection}
           onNavigate={onNavigate}
           candidateCount={allCandidates.length}
           shortlistedCount={shortlistedCandidates.length}
+          theme={theme}
+          onThemeToggle={onThemeToggle}
+          onReturnHome={onReturnHome}
         />
 
         <div className="min-w-0 flex-1">
+          <MobileNav
+            activeSection={activeSection}
+            onNavigate={onNavigate}
+            theme={theme}
+            onThemeToggle={onThemeToggle}
+            onReturnHome={onReturnHome}
+          />
           {renderSection()}
         </div>
 
@@ -298,6 +389,9 @@ function RecruiterDashboard({
             isShortlisted={shortlistedCandidates.some((item) => item.id === selectedCandidate?.id)}
             onToggleShortlist={onToggleShortlist}
             onViewProfile={onViewProfile}
+            onViewResume={onViewResume}
+            onSaveCandidateMeta={onSaveCandidateMeta}
+            savingCandidateId={savingCandidateId}
           />
         </div>
       </div>
