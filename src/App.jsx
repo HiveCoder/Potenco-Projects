@@ -2,7 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './index.css';
-import { clearSubmittedCandidates, loadSubmittedCandidates } from './candidateStorage.js';
+import {
+  clearShortlistedCandidates,
+  clearSubmittedCandidates,
+  loadShortlistedCandidates,
+  loadSubmittedCandidates,
+  toggleShortlistedCandidate
+} from './candidateStorage.js';
 import { candidates as seedCandidates, defaultRole, knownSkills, suggestedPrompt } from './data.js';
 import { requestJson } from './lib/api.js';
 import { buildDisplayCandidate, rankCandidates } from './lib/matching.js';
@@ -33,6 +39,8 @@ const mergeCandidatePools = (...candidateGroups) => {
 
   return Array.from(merged.values());
 };
+
+const loadLocalShortlistedIds = () => loadShortlistedCandidates().map((candidate) => candidate.id);
 
 const decodeBase64ToBytes = (value) => {
   const binary = window.atob(value);
@@ -135,6 +143,7 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
 
   const loadAppData = async () => {
     const localCandidates = loadSubmittedCandidates();
+    const localShortlistedIds = loadLocalShortlistedIds();
 
     try {
       const [candidatesPayload, shortlistPayload, jobsPayload] = await Promise.all([
@@ -161,7 +170,7 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
       setActiveJobId(jobsPayload?.activeJobId || 'job-default');
     } catch {
       setCandidates(mergeCandidatePools(seedCandidates, localCandidates));
-      setShortlistedIds([]);
+      setShortlistedIds(localShortlistedIds);
       setJobs([{ id: 'job-default', title: 'Frontend React Developer', role: defaultRole }]);
       setActiveJobId('job-default');
     }
@@ -211,7 +220,7 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
 
   useEffect(() => {
     const handleStorage = (event) => {
-      if (event.key && event.key !== 'talenthub-submitted-candidates') {
+      if (event.key && !['talenthub-submitted-candidates', 'talenthub-shortlisted-candidates'].includes(event.key)) {
         return;
       }
 
@@ -250,14 +259,20 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
   };
 
   const handleToggleShortlist = async (candidate) => {
-    const payload = await requestJson('/api/shortlist', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ candidateId: candidate.id })
-    });
-    setShortlistedIds(payload.shortlistedIds || []);
+    try {
+      const payload = await requestJson('/api/shortlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ candidateId: candidate.id })
+      });
+      setShortlistedIds(payload.shortlistedIds || []);
+    } catch {
+      const nextShortlisted = toggleShortlistedCandidate(candidate);
+      setShortlistedIds(nextShortlisted.map((item) => item.id));
+    }
+
     setSelectedCandidateId(candidate.id);
   };
 
@@ -378,8 +393,13 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
   };
 
   const handleClearShortlisted = async () => {
-    const payload = await requestJson('/api/shortlist', { method: 'DELETE' });
-    setShortlistedIds(payload.shortlistedIds || []);
+    try {
+      const payload = await requestJson('/api/shortlist', { method: 'DELETE' });
+      setShortlistedIds(payload.shortlistedIds || []);
+    } catch {
+      clearShortlistedCandidates();
+      setShortlistedIds([]);
+    }
   };
 
   const handleViewResume = (candidate) => {
