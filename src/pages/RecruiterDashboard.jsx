@@ -65,7 +65,7 @@ function RolesManager({ roleDraft, onRoleDraftChange, onApplyRole, onCreateJob, 
             onClick={onCreateJob}
             className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
           >
-            Save as New Job
+            Add New Job Role
           </button>
           <button
             type="button"

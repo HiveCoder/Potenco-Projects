@@ -25,6 +25,16 @@ const initialMatchState = {
 };
 
 const ADMIN_AUTH_KEY = 'talenthub-admin-auth';
+const JOBS_STORAGE_KEY = 'talenthub-jobs';
+const ACTIVE_JOB_STORAGE_KEY = 'talenthub-active-job-id';
+
+const createDefaultJob = () => ({
+  id: 'job-default',
+  title: 'Frontend React Developer',
+  role: defaultRole,
+  status: 'active',
+  createdAt: new Date().toISOString()
+});
 
 const mergeCandidatePools = (...candidateGroups) => {
   const merged = new Map();
@@ -41,6 +51,46 @@ const mergeCandidatePools = (...candidateGroups) => {
 };
 
 const loadLocalShortlistedIds = () => loadShortlistedCandidates().map((candidate) => candidate.id);
+
+const loadLocalJobsState = () => {
+  if (typeof window === 'undefined') {
+    const defaultJob = createDefaultJob();
+    return { jobs: [defaultJob], activeJobId: defaultJob.id };
+  }
+
+  const defaultJob = createDefaultJob();
+
+  try {
+    const rawJobs = window.localStorage.getItem(JOBS_STORAGE_KEY);
+    const rawActiveJobId = window.localStorage.getItem(ACTIVE_JOB_STORAGE_KEY);
+    const storedJobs = rawJobs ? JSON.parse(rawJobs) : [];
+    const jobs = Array.isArray(storedJobs) && storedJobs.length ? storedJobs : [defaultJob];
+    const activeJobId = jobs.some((job) => job.id === rawActiveJobId) ? rawActiveJobId : jobs[0].id;
+    return { jobs, activeJobId };
+  } catch {
+    return { jobs: [defaultJob], activeJobId: defaultJob.id };
+  }
+};
+
+const saveLocalJobsState = (jobs, activeJobId) => {
+  if (typeof window === 'undefined') {
+    return { jobs, activeJobId };
+  }
+
+  const defaultJob = createDefaultJob();
+  const normalizedJobs = Array.isArray(jobs) && jobs.length ? jobs : [defaultJob];
+  const normalizedActiveJobId = normalizedJobs.some((job) => job.id === activeJobId)
+    ? activeJobId
+    : normalizedJobs[0].id;
+
+  window.localStorage.setItem(JOBS_STORAGE_KEY, JSON.stringify(normalizedJobs));
+  window.localStorage.setItem(ACTIVE_JOB_STORAGE_KEY, normalizedActiveJobId);
+
+  return {
+    jobs: normalizedJobs,
+    activeJobId: normalizedActiveJobId
+  };
+};
 
 const decodeBase64ToBytes = (value) => {
   const binary = window.atob(value);
@@ -144,6 +194,7 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
   const loadAppData = async () => {
     const localCandidates = loadSubmittedCandidates();
     const localShortlistedIds = loadLocalShortlistedIds();
+    const localJobsState = loadLocalJobsState();
 
     try {
       const [candidatesPayload, shortlistPayload, jobsPayload] = await Promise.all([
@@ -168,11 +219,12 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
       setShortlistedIds(shortlistPayload?.shortlistedIds || []);
       setJobs(jobsPayload?.jobs || []);
       setActiveJobId(jobsPayload?.activeJobId || 'job-default');
+      saveLocalJobsState(jobsPayload?.jobs || [], jobsPayload?.activeJobId || 'job-default');
     } catch {
       setCandidates(mergeCandidatePools(seedCandidates, localCandidates));
       setShortlistedIds(localShortlistedIds);
-      setJobs([{ id: 'job-default', title: 'Frontend React Developer', role: defaultRole }]);
-      setActiveJobId('job-default');
+      setJobs(localJobsState.jobs);
+      setActiveJobId(localJobsState.activeJobId);
     }
   };
 
@@ -220,7 +272,10 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
 
   useEffect(() => {
     const handleStorage = (event) => {
-      if (event.key && !['talenthub-submitted-candidates', 'talenthub-shortlisted-candidates'].includes(event.key)) {
+      if (
+        event.key &&
+        !['talenthub-submitted-candidates', 'talenthub-shortlisted-candidates', JOBS_STORAGE_KEY, ACTIVE_JOB_STORAGE_KEY].includes(event.key)
+      ) {
         return;
       }
 
@@ -313,67 +368,113 @@ function DashboardRoute({ theme, onThemeToggle, onAdminLogout }) {
   const handleApplyRole = async () => {
     const nextRole = buildRoleFromDraft();
 
-    await requestJson('/api/jobs', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        action: 'update',
-        id: activeJobId,
-        patch: {
-          title: roleDraft.title,
-          role: nextRole,
-          status: 'active'
-        }
-      })
-    });
+    try {
+      await requestJson('/api/jobs', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'update',
+          id: activeJobId,
+          patch: {
+            title: roleDraft.title,
+            role: nextRole,
+            status: 'active'
+          }
+        })
+      });
+      setJobs((current) =>
+        current.map((job) => (job.id === activeJobId ? { ...job, title: roleDraft.title, role: nextRole, status: 'active' } : job))
+      );
+    } catch {
+      setJobs((current) => {
+        const nextJobs = current.map((job) =>
+          job.id === activeJobId ? { ...job, title: roleDraft.title, role: nextRole, status: 'active' } : job
+        );
+        saveLocalJobsState(nextJobs, activeJobId);
+        return nextJobs;
+      });
+    }
 
-    setJobs((current) =>
-      current.map((job) => (job.id === activeJobId ? { ...job, title: roleDraft.title, role: nextRole, status: 'active' } : job))
-    );
     runMatching(nextRole, `Matching ${nextRole.skills.join(', ')} in ${nextRole.location || 'any location'}`, candidates);
     setActiveSection('Search & Match');
   };
 
   const handleCreateJob = async () => {
-    const payload = await requestJson('/api/jobs', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        title: roleDraft.title,
-        role: buildRoleFromDraft()
-      })
-    });
-    setJobs(payload.jobs || []);
-    setActiveJobId(payload.activeJobId || activeJobId);
+    const nextRole = buildRoleFromDraft();
+
+    try {
+      const payload = await requestJson('/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: roleDraft.title,
+          role: nextRole
+        })
+      });
+      setJobs(payload.jobs || []);
+      setActiveJobId(payload.activeJobId || activeJobId);
+      saveLocalJobsState(payload.jobs || [], payload.activeJobId || activeJobId);
+    } catch {
+      const nextJob = {
+        id: `job-${Date.now()}`,
+        title: roleDraft.title || 'Untitled Role',
+        role: nextRole,
+        status: 'draft',
+        createdAt: new Date().toISOString()
+      };
+
+      setJobs((current) => {
+        const nextJobs = [nextJob, ...current];
+        saveLocalJobsState(nextJobs, nextJob.id);
+        return nextJobs;
+      });
+      setActiveJobId(nextJob.id);
+    }
+
     setActiveSection('Jobs / Roles');
   };
 
   const handleActivateJob = async (jobId) => {
-    const payload = await requestJson('/api/jobs', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ action: 'activate', id: jobId })
-    });
-    setJobs(payload.jobs || []);
-    setActiveJobId(payload.activeJobId || jobId);
+    try {
+      const payload = await requestJson('/api/jobs', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'activate', id: jobId })
+      });
+      setJobs(payload.jobs || []);
+      setActiveJobId(payload.activeJobId || jobId);
+      saveLocalJobsState(payload.jobs || [], payload.activeJobId || jobId);
+    } catch {
+      saveLocalJobsState(jobs, jobId);
+      setActiveJobId(jobId);
+    }
   };
 
   const handleDeleteJob = async (jobId) => {
-    const payload = await requestJson('/api/jobs', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ action: 'delete', id: jobId })
-    });
-    setJobs(payload.jobs || []);
-    setActiveJobId(payload.activeJobId || 'job-default');
+    try {
+      const payload = await requestJson('/api/jobs', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'delete', id: jobId })
+      });
+      setJobs(payload.jobs || []);
+      setActiveJobId(payload.activeJobId || 'job-default');
+      saveLocalJobsState(payload.jobs || [], payload.activeJobId || 'job-default');
+    } catch {
+      const nextJobs = jobs.filter((job) => job.id !== jobId);
+      const nextActiveJobId = activeJobId === jobId ? nextJobs[0]?.id || 'job-default' : activeJobId;
+      const nextState = saveLocalJobsState(nextJobs, nextActiveJobId);
+      setJobs(nextState.jobs);
+      setActiveJobId(nextState.activeJobId);
+    }
   };
 
   const handleResetRole = async () => {
